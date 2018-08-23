@@ -49,8 +49,61 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         add_devices([pioneer])
 
 
+class PioneerAVRCommandSet:
+    def power_on_command(self):
+        pass
+
+    def power_off_command(self):
+        pass
+
+    def get_power_state_command(self):
+        pass
+
+    pass
+
+
+class OldPioneerAVRModelsCommandSet(PioneerAVRCommandSet):
+    def power_on_command(self, source):
+        return "PO"
+
+    def power_off_command(self, source):
+        return "PF"
+
+    def get_power_state_command(self):
+        return {"?PWR", "?P"}
+
+class PioneerVSX932CommandSet(PioneerAVRCommandSet):
+    @staticmethod
+    def get_command_prefix():
+        return bytes(0x49,0x53,0x43,0x50,0x00,0x00,0x00,0x10,0x00,0x00,0x00,0x0a,0x01,0x00,0x00,0x00,0x21,0x31)
+
+    @staticmethod
+    def get_end_of_command_suffix():
+        return bytes(0x0d)
+
+    def power_on_command(self, source):
+        return self.get_command_prefix() + "PWR01" + self.get_end_of_command_suffix()
+
+    def power_off_command(self, source):
+        return self.get_command_prefix() + "PWR00" + self.get_end_of_command_suffix()
+
+    def get_power_state_command(self):
+        return {self.get_command_prefix() + "PWRQSTN" + self.get_end_of_command_suffix(), "?"}
+
+
+class PioneerAVRCommandSetFactory:
+    @staticmethod
+    def get_command_set(model):
+        if model is "VSX-932":
+            return PioneerVSX932CommandSet()
+        else:
+            return OldPioneerAVRModelsCommandSet()
+
+
 class PioneerDevice(MediaPlayerDevice):
     """Representation of a Pioneer device."""
+
+    commandSet: PioneerAVRCommandSet = PioneerAVRCommandSetFactory.get_command_set("VSX-932")
 
     def __init__(self, name, host, port, timeout):
         """Initialize the Pioneer device."""
@@ -191,7 +244,7 @@ class PioneerDevice(MediaPlayerDevice):
 
     def turn_off(self):
         """Turn off media player."""
-        self.telnet_command("PF")
+        self.telnet_command(self.commandSet.power_off_command())
 
     def volume_up(self):
         """Volume up media player."""
@@ -212,7 +265,7 @@ class PioneerDevice(MediaPlayerDevice):
 
     def turn_on(self):
         """Turn the media player on."""
-        self.telnet_command("PO")
+        self.telnet_command(self.commandSet.power_on_command())
 
     def select_source(self, source):
         """Select input source."""
