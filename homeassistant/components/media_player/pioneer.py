@@ -59,6 +59,15 @@ class PioneerAVRCommandSet:
     def get_power_state_command(self):
         pass
 
+    def get_volume_state_command(self):
+        pass
+
+    def get_mute_state_command(self):
+        pass
+
+    def get_muted_value(self):
+        pass
+
     pass
 
 
@@ -70,7 +79,16 @@ class OldPioneerAVRModelsCommandSet(PioneerAVRCommandSet):
         return "PF"
 
     def get_power_state_command(self):
-        return {"?PWR", "?P"}
+        return {"?P", "PWR"}
+
+    def get_volume_state_command(self):
+        return {"?V", "VOL"}
+
+    def get_mute_state_command(self):
+        return {"?M", "MUT"}
+
+    def get_muted_value(self):
+        return "MUT0"
 
 class PioneerVSX932CommandSet(PioneerAVRCommandSet):
     @staticmethod
@@ -88,7 +106,19 @@ class PioneerVSX932CommandSet(PioneerAVRCommandSet):
         return self.get_command_prefix() + "PWR00" + self.get_end_of_command_suffix()
 
     def get_power_state_command(self):
-        return {self.get_command_prefix() + "PWRQSTN" + self.get_end_of_command_suffix(), "?"}
+        return {self.get_command_prefix() + "PWRQSTN" + self.get_end_of_command_suffix(),
+                self.get_command_prefix() + "!1PWR"}
+
+    def get_volume_state_command(self):
+        return {self.get_command_prefix() + "MVLQSTN" + self.get_end_of_command_suffix(),
+                self.get_command_prefix() + "!1MVL"}
+
+    def get_mute_state_command(self):
+        return {self.get_command_prefix() + "AMTQSTN" + self.get_end_of_command_suffix(),
+                self.get_command_prefix() + "!1AMT"}
+
+    def get_muted_value(self):
+        return "AMT01"
 
 
 class PioneerAVRCommandSetFactory:
@@ -161,15 +191,18 @@ class PioneerDevice(MediaPlayerDevice):
             _LOGGER.warning("Pioneer %s refused connection", self._name)
             return False
 
-        pwstate = self.telnet_request(telnet, "?P", "PWR")
+        pwstate = self.telnet_request(telnet, self.commandSet.get_power_state_command()[0],
+                                      self.commandSet.get_power_state_command()[1])
         if pwstate:
             self._pwstate = pwstate
 
-        volume_str = self.telnet_request(telnet, "?V", "VOL")
+        volume_str = self.telnet_request(telnet, self.commandSet.get_volume_state_command()[0],
+                                         self.commandSet.get_volume_state_command()[1])
         self._volume = int(volume_str[3:]) / MAX_VOLUME if volume_str else None
 
-        muted_value = self.telnet_request(telnet, "?M", "MUT")
-        self._muted = (muted_value == "MUT0") if muted_value else None
+        muted_value = self.telnet_request(telnet, self.commandSet.get_mute_state_command()[0],
+                                          self.commandSet.get_mute_state_command()[1])
+        self._muted = (muted_value.__contains__(self.commandSet.get_muted_value())) if muted_value else None
 
         # Build the source name dictionaries if necessary
         if not self._source_name_to_number:
